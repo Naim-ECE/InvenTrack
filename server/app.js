@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import path from "path";
+import { fileURLToPath } from "url";
 import env from "./config/env.js";
 
 // Route imports
@@ -15,6 +17,9 @@ import inventoryRoutes from "./routes/inventoryRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -82,9 +87,18 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/notifications", notificationRoutes);
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: "Route not found" });
+// Serve static frontend files (ADD THIS)
+const distPath = path.join(__dirname, "../app/dist");
+app.use(express.static(distPath));
+
+// For any non-API route, serve the React app (ADD THIS)
+app.get("*", (req, res) => {
+  res.sendFile(path.join(distPath, "index.html"));
+});
+
+// API 404 handler - only for /api/* routes (MODIFY THIS)
+app.use("/api/*", (req, res) => {
+  res.status(404).json({ error: "API route not found" });
 });
 
 // Global error handler
