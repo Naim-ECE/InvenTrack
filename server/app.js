@@ -31,13 +31,24 @@ app.use(
 );
 
 // CORS
-const allowedOrigins = [env.CLIENT_URL, "http://localhost:5173"];
+const allowedOrigins = [
+  env.CLIENT_URL,
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://inventrack-app-x978.onrender.com",
+  process.env.RENDER_EXTERNAL_URL, // Render provides this automatically
+].filter(Boolean);
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      // Allow requests with no origin (like mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+
+      // Check if origin is allowed
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        // console.log(`CORS blocked origin: ${origin}`);
         callback(new Error("Not allowed by CORS"));
       }
     },
