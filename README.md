@@ -47,7 +47,7 @@ The objective of this project is to build a backend-focused inventory management
 - Express.js  
 
 ### Database
-- MySQL / PostgreSQL  
+- MongoDB  
 
 ---
 
