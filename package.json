@@ -10,8 +10,7 @@
     "seed": "node server/utils/resetDatabase.js",
     "reset-db": "node server/utils/resetDatabase.js",
     "seed:catalog": "node server/utils/seedCatalog.js",
-    "build": "cd app && npm install && npm run build",
-    "render-build": "npm run build"
+    "build": "cd app && npm install && npm run build"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

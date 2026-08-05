@@ -31,10 +31,13 @@ const cartSlice = createSlice({
       const existing = state.items.find(
         (item) => item.product.id === product.id && item.variant === variant
       );
+      const maxQuantity = Math.max(0, Number(product.stock || 0));
+      if (maxQuantity <= 0) return;
+
       if (existing) {
-        existing.quantity += quantity;
+        existing.quantity = Math.min(existing.quantity + quantity, maxQuantity);
       } else {
-        state.items.push({ product, quantity, variant });
+        state.items.push({ product, quantity: Math.min(quantity, maxQuantity), variant });
       }
       saveCart(state.items);
     },
@@ -49,7 +52,8 @@ const cartSlice = createSlice({
         (item) => item.product.id === action.payload.productId && item.variant === action.payload.variant
       );
       if (item) {
-        item.quantity = Math.max(1, action.payload.quantity);
+        const maxQuantity = Math.max(1, Number(item.product.stock || 0));
+        item.quantity = Math.min(Math.max(1, action.payload.quantity), maxQuantity);
         saveCart(state.items);
       }
     },

@@ -27,7 +27,7 @@ export const getDashboardStats = async (req, res) => {
         .sort({ createdAt: -1 })
         .limit(5),
       Notification.find({ recipient: req.user._id }).sort({ createdAt: -1 }).limit(5),
-      Product.find({ stock: { $lte: 10 } }).select('_id').limit(20),
+      Product.find({ stock: { $gt: 0, $lt: 8 } }).select('_id').limit(20),
     ]);
 
     res.json({

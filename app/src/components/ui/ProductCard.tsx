@@ -7,6 +7,7 @@ import { addToCart } from '@/store/slices/cartSlice';
 import { toggleWishlist } from '@/store/slices/wishlistSlice';
 import { addToast } from '@/store/slices/uiSlice';
 import type { RootState } from '@/store';
+import { getStockLabel, getStockStatus } from '@/lib/stock';
 
 interface ProductCardProps {
   product: Product;
@@ -16,14 +17,26 @@ interface ProductCardProps {
 export default function ProductCard({ product, index = 0 }: ProductCardProps) {
   const dispatch = useDispatch();
   const wishlistItems = useSelector((state: RootState) => state.wishlist.items);
+  const cartItems = useSelector((state: RootState) => state.cart.items);
   const isWishlisted = wishlistItems.some((item) => item.id === product.id);
   const discount = product.originalPrice
     ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
     : 0;
+  const stockStatus = getStockStatus(product.stock);
+  const stockLabel = getStockLabel(product.stock);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (stockStatus === 'out') {
+      dispatch(addToast({ type: 'warning', message: `${product.name} is out of stock` }));
+      return;
+    }
+    const existingQuantity = cartItems.find((item) => item.product.id === product.id)?.quantity || 0;
+    if (existingQuantity >= product.stock) {
+      dispatch(addToast({ type: 'warning', message: `${product.name} is out of stock` }));
+      return;
+    }
     dispatch(addToCart({ product, quantity: 1 }));
     dispatch(addToast({ type: 'success', message: `${product.name} added to cart` }));
   };
@@ -81,6 +94,10 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
           <span className="text-xs text-[#94A3B8]">({product.reviewCount})</span>
         </div>
 
+        <p className={`text-xs font-medium mb-3 ${stockStatus === 'out' ? 'text-[#EF4444]' : stockStatus === 'low' ? 'text-[#F59E0B]' : 'text-[#22C55E]'}`}>
+          {stockLabel}
+        </p>
+
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-base font-bold text-[#22C55E]">${product.price.toFixed(2)}</span>
@@ -90,6 +107,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
           </div>
           <button
             onClick={handleAddToCart}
+            disabled={stockStatus === 'out'}
             className="w-8 h-8 rounded-lg bg-[#22C55E] text-white flex items-center justify-center hover:bg-[#16A34A] transition-colors active:scale-95"
           >
             <ShoppingCart className="w-4 h-4" />

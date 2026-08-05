@@ -1,30 +1,85 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { motion } from 'framer-motion';
 import { Heart, Star, ShoppingCart, Truck, RotateCcw, ShieldCheck, Minus, Plus, CheckCircle } from 'lucide-react';
-import { products, reviews } from '@/data/mockData';
+import { reviews } from '@/data/mockData';
 import { addToCart } from '@/store/slices/cartSlice';
 import { toggleWishlist } from '@/store/slices/wishlistSlice';
 import { addToast } from '@/store/slices/uiSlice';
 import type { RootState } from '@/store';
 import ProductCard from '@/components/ui/ProductCard';
+import { productApi } from '@/lib/apis/productApi';
+import type { Product } from '@/types';
+import { getStockLabel, getStockStatus } from '@/lib/stock';
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const dispatch = useDispatch();
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'description' | 'specs' | 'reviews'>('description');
+  const [product, setProduct] = useState<Product | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
 
-  const product = products.find((p) => p.id === id) || products[0];
   const wishlistItems = useSelector((state: RootState) => state.wishlist.items);
-  const isWishlisted = wishlistItems.some((item) => item.id === product.id);
-  const relatedProducts = products.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4);
+  const cartItems = useSelector((state: RootState) => state.cart.items);
+  const isWishlisted = wishlistItems.some((item) => item.id === product?.id);
 
-  const stockStatus = product.stock === 0 ? 'out' : product.stock <= (product.lowStockThreshold || 10) ? 'low' : 'in';
+  useEffect(() => {
+    let active = true;
+
+    const loadProduct = async () => {
+      if (!id) return;
+
+      try {
+        const [liveProduct, liveProducts] = await Promise.all([
+          productApi.getProductById(id),
+          productApi.getProducts({ status: 'active', limit: 100 }),
+        ]);
+
+        if (!active) return;
+
+        setProduct(liveProduct);
+        setRelatedProducts(
+          liveProducts.products.filter((item) => item.category === liveProduct.category && item.id !== liveProduct.id).slice(0, 4)
+        );
+        setQuantity(1);
+      } catch {
+        if (!active) return;
+        setProduct(null);
+        setRelatedProducts([]);
+      }
+    };
+
+    void loadProduct();
+
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  if (!product) {
+    return <div className="max-w-7xl mx-auto px-4 py-8 text-sm text-[#64748B]">Loading product...</div>;
+  }
+
+  const stockStatus = getStockStatus(product.stock);
+  const stockLabel = getStockLabel(product.stock);
   const discount = product.originalPrice ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) : 0;
 
   const handleAddToCart = () => {
+    if (stockStatus === 'out') {
+      dispatch(addToast({ type: 'warning', message: `${product.name} is out of stock` }));
+      return;
+    }
+    const existingQuantity = cartItems.find((item) => item.product.id === product.id)?.quantity || 0;
+    if (existingQuantity + quantity > product.stock) {
+      dispatch(addToast({ type: 'warning', message: `Only ${product.stock} items are available for ${product.name}` }));
+      return;
+    }
+    if (quantity > product.stock) {
+      dispatch(addToast({ type: 'warning', message: `Only ${product.stock} items are available for ${product.name}` }));
+      return;
+    }
     dispatch(addToCart({ product, quantity }));
     dispatch(addToast({ type: 'success', message: `${product.name} added to cart` }));
   };
@@ -86,14 +141,20 @@ export default function ProductDetailPage() {
 
             <div className={`flex items-center gap-2 text-sm mb-6 ${stockStatus === 'in' ? 'text-[#22C55E]' : stockStatus === 'low' ? 'text-[#F59E0B]' : 'text-[#EF4444]'}`}>
               <div className={`w-2 h-2 rounded-full ${stockStatus === 'in' ? 'bg-[#22C55E]' : stockStatus === 'low' ? 'bg-[#F59E0B]' : 'bg-[#EF4444]'}`} />
-              {stockStatus === 'in' ? `In Stock — ${product.stock} units available` : stockStatus === 'low' ? `Low Stock — Only ${product.stock} left` : 'Out of Stock'}
+              {stockLabel}
             </div>
 
             <div className="flex items-center gap-4 mb-6">
               <div className="flex items-center border border-[#E2E8F0] rounded-lg">
                 <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="p-2 hover:bg-[#F8FAFC] transition-colors"><Minus className="w-4 h-4 text-[#64748B]" /></button>
                 <span className="w-12 text-center text-sm font-medium">{quantity}</span>
-                <button onClick={() => setQuantity(Math.min(product.stock, quantity + 1))} className="p-2 hover:bg-[#F8FAFC] transition-colors"><Plus className="w-4 h-4 text-[#64748B]" /></button>
+                <button onClick={() => {
+                  if (quantity >= product.stock) {
+                    dispatch(addToast({ type: 'warning', message: `Only ${product.stock} items are available for ${product.name}` }));
+                    return;
+                  }
+                  setQuantity(Math.min(product.stock, quantity + 1));
+                }} className="p-2 hover:bg-[#F8FAFC] transition-colors"><Plus className="w-4 h-4 text-[#64748B]" /></button>
               </div>
             </div>
 

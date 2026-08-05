@@ -22,7 +22,7 @@ export const getDashboardStats = async (req, res) => {
         activeProducts: products.filter((product) => product.status === 'active').length,
         orders: orders.length,
         revenue,
-        lowStock: products.filter((product) => product.stock <= 10).length,
+        lowStock: products.filter((product) => product.stock > 0 && product.stock < 8).length,
         totalSold: products.reduce((sum, product) => sum + product.totalSold, 0),
       },
     });

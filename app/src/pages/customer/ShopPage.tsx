@@ -1,15 +1,50 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, SlidersHorizontal, Grid3X3, List } from 'lucide-react';
-import { products, categories } from '@/data/mockData';
+import { categories as mockCategories } from '@/data/mockData';
 import ProductCard from '@/components/ui/ProductCard';
+import { productApi } from '@/lib/apis/productApi';
+import type { Category, Product } from '@/types';
+import { useDispatch } from 'react-redux';
+import { addToast } from '@/store/slices/uiSlice';
 
 export default function ShopPage() {
+  const dispatch = useDispatch();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState('featured');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [priceRange, setPriceRange] = useState(1000);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>(mockCategories);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProducts = async () => {
+      try {
+        const [{ products: liveProducts }, liveCategories] = await Promise.all([
+          productApi.getProducts({ status: 'active', limit: 100 }),
+          productApi.getCategories().catch(() => mockCategories),
+        ]);
+
+        if (!active) return;
+        setProducts(liveProducts);
+        setCategories(liveCategories);
+      } catch {
+        if (!active) return;
+        setProducts([]);
+        setCategories(mockCategories);
+        dispatch(addToast({ type: 'warning', message: 'Using fallback product data while loading catalog' }));
+      }
+    };
+
+    void loadProducts();
+
+    return () => {
+      active = false;
+    };
+  }, [dispatch]);
 
   const filtered = useMemo(() => {
     let result = [...products];
@@ -56,7 +91,7 @@ export default function ShopPage() {
                     <span className="text-sm text-[#64748B]">All Categories</span>
                   </label>
                   {categories.map((cat) => (
-                    <label key={cat.id} className="flex items-center gap-2 cursor-pointer">
+                    <label key={cat.id || (cat as { _id?: string })._id || cat.name} className="flex items-center gap-2 cursor-pointer">
                       <input type="radio" name="category" checked={selectedCategory === cat.name} onChange={() => setSelectedCategory(cat.name)} className="text-[#22C55E] focus:ring-[#22C55E]" />
                       <span className="text-sm text-[#64748B]">{cat.name} ({cat.productCount})</span>
                     </label>
@@ -112,7 +147,9 @@ export default function ShopPage() {
                         <p className="text-xs text-[#94A3B8] mt-1 line-clamp-1">{product.shortDescription}</p>
                         <div className="flex items-center justify-between mt-2">
                           <span className="text-base font-bold text-[#22C55E]">${product.price.toFixed(2)}</span>
-                          <span className="text-xs text-[#94A3B8]">Stock: {product.stock}</span>
+                          <span className={`text-xs ${product.stock === 0 ? 'text-[#EF4444]' : product.stock < 8 ? 'text-[#F59E0B]' : 'text-[#94A3B8]'}`}>
+                            {product.stock === 0 ? 'Out of stock' : product.stock < 8 ? `Low stock: ${product.stock}` : `Stock: ${product.stock}`}
+                          </span>
                         </div>
                       </div>
                     </motion.div>

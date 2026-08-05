@@ -1,25 +1,20 @@
-import path from "path";
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
-import { inspectAttr } from "kimi-plugin-inspect-react";
+import path from "path"
+import react from "@vitejs/plugin-react"
+import { defineConfig } from "vite"
+import { inspectAttr } from 'kimi-plugin-inspect-react'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: "/", // Changed from './' to '/'
+  base: './',
   plugins: [inspectAttr(), react()],
   server: {
     port: 3000,
     proxy: {
-      "/api": {
-        target: "http://localhost:5000",
+      '/api': {
+        target: 'http://localhost:5000',
         changeOrigin: true,
       },
     },
-  },
-  build: {
-    outDir: "dist", // Explicitly set output directory
-    assetsDir: "assets",
-    emptyOutDir: true,
   },
   resolve: {
     alias: {

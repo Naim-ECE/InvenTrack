@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 import { Minus, Plus, Trash2, ShoppingCart, ArrowRight, Tag } from 'lucide-react';
 import type { RootState } from '@/store';
 import { updateQuantity, removeFromCart } from '@/store/slices/cartSlice';
+import { addToast } from '@/store/slices/uiSlice';
+import { getStockLabel, getStockStatus } from '@/lib/stock';
 
 export default function CartPage() {
   const dispatch = useDispatch();
@@ -54,6 +56,9 @@ export default function CartPage() {
                   <div>
                     <h3 className="text-sm font-medium text-[#0F172A]">{item.product.name}</h3>
                     <p className="text-xs text-[#94A3B8] mt-0.5">{item.product.vendor}</p>
+                    <p className={`text-xs mt-1 ${getStockStatus(item.product.stock) === 'out' ? 'text-[#EF4444]' : getStockStatus(item.product.stock) === 'low' ? 'text-[#F59E0B]' : 'text-[#22C55E]'}`}>
+                      {getStockLabel(item.product.stock)}
+                    </p>
                   </div>
                   <button onClick={() => dispatch(removeFromCart({ productId: item.product.id }))} className="p-1.5 text-[#94A3B8] hover:text-[#EF4444] hover:bg-[#FEE2E2] rounded-lg transition-colors shrink-0">
                     <Trash2 className="w-4 h-4" />
@@ -63,7 +68,18 @@ export default function CartPage() {
                   <div className="flex items-center border border-[#E2E8F0] rounded-lg">
                     <button onClick={() => dispatch(updateQuantity({ productId: item.product.id, quantity: item.quantity - 1 }))} className="p-1.5 hover:bg-[#F8FAFC]"><Minus className="w-3.5 h-3.5 text-[#64748B]" /></button>
                     <span className="w-8 text-center text-sm">{item.quantity}</span>
-                    <button onClick={() => dispatch(updateQuantity({ productId: item.product.id, quantity: item.quantity + 1 }))} className="p-1.5 hover:bg-[#F8FAFC]"><Plus className="w-3.5 h-3.5 text-[#64748B]" /></button>
+                    <button
+                      onClick={() => {
+                        if (item.quantity >= item.product.stock) {
+                          dispatch(addToast({ type: 'warning', message: `${item.product.name} is out of stock` }));
+                          return;
+                        }
+                        dispatch(updateQuantity({ productId: item.product.id, quantity: item.quantity + 1 }));
+                      }}
+                      className="p-1.5 hover:bg-[#F8FAFC]"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-[#64748B]" />
+                    </button>
                   </div>
                   <span className="text-base font-bold text-[#22C55E]">${(item.product.price * item.quantity).toFixed(2)}</span>
                 </div>

@@ -6,6 +6,8 @@ import { CheckCircle, ChevronRight, CreditCard, MapPin, ShoppingBag } from 'luci
 import type { RootState } from '@/store';
 import { clearCart } from '@/store/slices/cartSlice';
 import { addToast } from '@/store/slices/uiSlice';
+import { getStockStatus } from '@/lib/stock';
+import api from '@/lib/api';
 
 const steps = [
   { id: 1, label: 'Shipping', icon: MapPin },
@@ -20,18 +22,54 @@ export default function CheckoutPage() {
   const items = useSelector((state: RootState) => state.cart.items);
   const [currentStep, setCurrentStep] = useState(1);
   const [shippingMethod, setShippingMethod] = useState('standard');
+  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'debit_card' | 'paypal' | 'cod'>('credit_card');
+  const [shippingAddress, setShippingAddress] = useState({
+    fullName: '',
+    phone: '',
+    line1: '',
+    line2: '',
+    city: '',
+    state: '',
+    zip: '',
+    country: 'USA',
+  });
   const [confirmed, setConfirmed] = useState(false);
+  const [orderNumber, setOrderNumber] = useState('');
+  const [placingOrder, setPlacingOrder] = useState(false);
 
   const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const shipping = shippingMethod === 'express' ? 12.99 : shippingMethod === 'free' ? 0 : 5.99;
   const tax = subtotal * 0.08;
   const total = subtotal + shipping + tax;
+  const hasUnavailableItem = items.some((item) => getStockStatus(item.product.stock) === 'out');
 
-  const handlePlaceOrder = () => {
-    setConfirmed(true);
-    setCurrentStep(4);
-    dispatch(clearCart());
-    dispatch(addToast({ type: 'success', message: 'Order placed successfully!' }));
+  const handlePlaceOrder = async () => {
+    if (hasUnavailableItem) {
+      dispatch(addToast({ type: 'error', message: 'One or more items are out of stock. Please update your cart.' }));
+      return;
+    }
+
+    try {
+      setPlacingOrder(true);
+      const { data } = await api.post('/api/orders', {
+        items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity, variant: item.variant })),
+        shippingAddress,
+        paymentMethod,
+        shipping,
+        tax,
+        discount: 0,
+      });
+
+      setOrderNumber(data.order?.orderNumber || '');
+      setConfirmed(true);
+      setCurrentStep(4);
+      dispatch(clearCart());
+      dispatch(addToast({ type: 'success', message: 'Order placed successfully!' }));
+    } catch (error) {
+      dispatch(addToast({ type: 'error', message: error instanceof Error ? error.message : 'Failed to place order' }));
+    } finally {
+      setPlacingOrder(false);
+    }
   };
 
   if (items.length === 0 && !confirmed) {
@@ -65,10 +103,24 @@ export default function CheckoutPage() {
             <div className="bg-white rounded-xl border border-[#E2E8F0] p-6">
               <h3 className="text-lg font-semibold text-[#0F172A] font-[Poppins] mb-4">Shipping Address</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {['Full Name', 'Phone Number', 'Address Line 1', 'Address Line 2', 'City', 'ZIP Code'].map((field) => (
-                  <div key={field} className={field === 'Address Line 1' || field === 'Address Line 2' ? 'sm:col-span-2' : ''}>
-                    <label className="block text-sm text-[#64748B] mb-1.5">{field} {field !== 'Address Line 2' && <span className="text-[#EF4444]">*</span>}</label>
-                    <input type="text" placeholder={field} className="w-full px-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-sm focus:border-[#22C55E] outline-none transition-colors" />
+                {[
+                  { label: 'Full Name', key: 'fullName', required: true },
+                  { label: 'Phone Number', key: 'phone', required: true },
+                  { label: 'Address Line 1', key: 'line1', required: true, span: 'sm:col-span-2' },
+                  { label: 'Address Line 2', key: 'line2', required: false, span: 'sm:col-span-2' },
+                  { label: 'City', key: 'city', required: true },
+                  { label: 'State', key: 'state', required: true },
+                  { label: 'ZIP Code', key: 'zip', required: true },
+                ].map((field) => (
+                  <div key={field.key} className={field.span || ''}>
+                    <label className="block text-sm text-[#64748B] mb-1.5">{field.label} {field.required && <span className="text-[#EF4444]">*</span>}</label>
+                    <input
+                      type="text"
+                      value={shippingAddress[field.key as keyof typeof shippingAddress]}
+                      onChange={(e) => setShippingAddress((current) => ({ ...current, [field.key]: e.target.value }))}
+                      placeholder={field.label}
+                      className="w-full px-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-sm focus:border-[#22C55E] outline-none transition-colors"
+                    />
                   </div>
                 ))}
               </div>
@@ -136,16 +188,16 @@ export default function CheckoutPage() {
               <h3 className="text-lg font-semibold text-[#0F172A] font-[Poppins] mb-4">Payment Method</h3>
               <div className="space-y-3">
                 <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-[#22C55E] bg-[rgba(34,197,94,0.05)] cursor-pointer">
-                  <input type="radio" name="payment" defaultChecked className="text-[#22C55E]" />
+                  <input type="radio" name="payment" checked={paymentMethod === 'credit_card'} onChange={() => setPaymentMethod('credit_card')} className="text-[#22C55E]" />
                   <CreditCard className="w-5 h-5 text-[#22C55E]" />
                   <span className="text-sm font-medium text-[#0F172A]">Credit / Debit Card</span>
                 </label>
                 <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-[#E2E8F0] cursor-pointer hover:border-[#22C55E]/50 transition-colors">
-                  <input type="radio" name="payment" className="text-[#22C55E]" />
+                  <input type="radio" name="payment" checked={paymentMethod === 'paypal'} onChange={() => setPaymentMethod('paypal')} className="text-[#22C55E]" />
                   <span className="text-sm font-medium text-[#0F172A]">PayPal</span>
                 </label>
                 <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-[#E2E8F0] cursor-pointer hover:border-[#22C55E]/50 transition-colors">
-                  <input type="radio" name="payment" className="text-[#22C55E]" />
+                  <input type="radio" name="payment" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} className="text-[#22C55E]" />
                   <span className="text-sm font-medium text-[#0F172A]">Cash on Delivery</span>
                 </label>
               </div>
@@ -170,7 +222,7 @@ export default function CheckoutPage() {
 
             <div className="flex justify-between">
               <button onClick={() => setCurrentStep(2)} className="px-6 py-2.5 border border-[#E2E8F0] text-[#64748B] font-medium rounded-lg hover:bg-[#F8FAFC] transition-colors">Back</button>
-              <button onClick={handlePlaceOrder} className="px-8 py-2.5 bg-[#22C55E] text-white font-medium rounded-lg hover:bg-[#16A34A] transition-colors">Place Order — ${total.toFixed(2)}</button>
+                <button onClick={handlePlaceOrder} disabled={placingOrder} className="px-8 py-2.5 bg-[#22C55E] text-white font-medium rounded-lg hover:bg-[#16A34A] transition-colors disabled:opacity-50">{placingOrder ? 'Placing Order...' : `Place Order — $${total.toFixed(2)}`}</button>
             </div>
           </motion.div>
         )}
@@ -181,7 +233,7 @@ export default function CheckoutPage() {
               <CheckCircle className="w-10 h-10 text-[#22C55E]" />
             </motion.div>
             <h2 className="text-2xl font-bold text-[#22C55E] font-[Poppins] mb-2">Order Placed Successfully!</h2>
-            <p className="text-sm text-[#64748B] mb-2">Order #INV-2024-00{Math.floor(Math.random() * 9000) + 1000}</p>
+            <p className="text-sm text-[#64748B] mb-2">Order #{orderNumber || 'Processing...'}</p>
             <p className="text-sm text-[#94A3B8] mb-8">Thank you for your order. We've sent a confirmation email.</p>
             <div className="flex justify-center gap-4">
               <button onClick={() => navigate('/orders')} className="px-6 py-2.5 bg-[#22C55E] text-white font-medium rounded-lg hover:bg-[#16A34A] transition-colors">Track Order</button>

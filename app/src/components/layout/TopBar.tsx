@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, Menu, Sun, Moon, User, LogOut, Settings, Package } from 'lucide-react';
+import { Search, Bell, Menu, Sun, Moon, User, LogOut, Settings, Package, X } from 'lucide-react';
 import type { RootState } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
 import { toggleTheme } from '@/store/slices/themeSlice';
 import { useDispatch } from 'react-redux';
 import { getRoleHomePath } from '@/lib/roles';
+import api from '@/lib/api';
 import { notificationApi, type NotificationItem } from '@/lib/apis/notificationApi';
 import { io, type Socket } from 'socket.io-client';
 
@@ -120,6 +121,18 @@ export default function TopBar({ title, onMenuClick }: TopBarProps) {
     }
   };
 
+  const handleDeleteNotification = async (notification: NotificationItem) => {
+    try {
+      await api.delete(`/api/notifications/${notification._id}`);
+      setNotifications((current) => current.filter((item) => item._id !== notification._id));
+      if (!notification.read) {
+        setUnreadCount((current) => Math.max(current - 1, 0));
+      }
+    } catch (error) {
+      setNotificationError(error instanceof Error ? error.message : 'Failed to delete notification');
+    }
+  };
+
   const getDashboardLink = () => {
     if (!user) return '/';
     return user.role === 'customer' ? '/profile' : getRoleHomePath(user.role);
@@ -169,16 +182,28 @@ export default function TopBar({ title, onMenuClick }: TopBarProps) {
                     <div className="px-4 py-4 text-sm text-[#9CA3AF]">No notifications yet.</div>
                   )}
                   {!loadingNotifications && !notificationError && notifications.map((notification) => (
-                    <button
+                    <div
                       key={notification._id}
-                      type="button"
-                      onClick={() => { void handleNotificationClick(notification); }}
-                      className={`w-full text-left px-4 py-3 border-b border-[#2D3748] hover:bg-[rgba(255,255,255,0.05)] cursor-pointer ${!notification.read ? 'border-l-[3px] border-l-[#22C55E]' : ''}`}
+                      className={`relative w-full text-left px-4 py-3 border-b border-[#2D3748] hover:bg-[rgba(255,255,255,0.05)] ${!notification.read ? 'border-l-[3px] border-l-[#22C55E]' : ''}`}
                     >
-                      <p className="text-sm text-[#F9FAFB] font-medium">{notification.title}</p>
-                      <p className="text-xs text-[#9CA3AF] mt-0.5">{notification.message}</p>
-                      <p className="text-[10px] text-[#6B7280] mt-1">{new Date(notification.createdAt).toLocaleDateString()}</p>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => { void handleNotificationClick(notification); }}
+                        className="w-full text-left pr-8"
+                      >
+                        <p className="text-sm text-[#F9FAFB] font-medium">{notification.title}</p>
+                        <p className="text-xs text-[#9CA3AF] mt-0.5">{notification.message}</p>
+                        <p className="text-[10px] text-[#6B7280] mt-1">{new Date(notification.createdAt).toLocaleDateString()}</p>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Delete notification"
+                        onClick={() => { void handleDeleteNotification(notification); }}
+                        className="absolute right-3 top-3 p-1 rounded-md text-[#6B7280] hover:text-[#F9FAFB] hover:bg-[rgba(255,255,255,0.08)]"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
